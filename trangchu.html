@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Attendance Pro - Hệ Thống Hỗ Trợ Điểm Danh Nhà Gioan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --brand-primary: #4F46E5;
+            --brand-success: #10B981;
+            --brand-warning: #F59E0B;
+            --brand-danger: #EF4444;
+            --bg-main: #F8FAFC;
+        }
+
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: var(--bg-main);
+            color: #1E293B;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .soft-shadow {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.02);
+        }
+
+        .table-wrapper {
+            position: relative;
+            overflow: auto;
+            max-height: calc(100vh - 400px);
+            border-radius: 16px;
+            background: white;
+            border: 1px solid #E2E8F0;
+        }
+
+        table { border-collapse: separate; border-spacing: 0; width: 100%; }
+
+        thead th {
+            position: sticky; top: 0; z-index: 30;
+            background: #F8FAFC;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #64748B;
+            padding: 14px 8px;
+            border-bottom: 1px solid #E2E8F0;
+        }
+
+        .sticky-col {
+            position: sticky; left: 0; z-index: 20;
+            background: white;
+            border-right: 1px solid #F1F5F9;
+            width: 150px;
+            min-width: 150px;
+        }
+
+        /* Active column highlight */
+        .active-week-col {
+            background-color: #EEF2FF !important;
+        }
+
+        td { 
+            padding: 10px 4px; 
+            border-bottom: 1px solid #F1F5F9;
+            height: 64px;
+        }
+
+        .att-btn {
+            width: 42px;
+            height: 42px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            font-weight: 800;
+            font-size: 15px;
+            transition: all 0.1s ease;
+            cursor: pointer;
+            border: 2px solid transparent;
+            margin: 0 auto;
+            user-select: none;
+        }
+
+        .state-empty { background: #F1F5F9; border-color: #E2E8F0; color: #CBD5E1; }
+        .state-x { background: #DCFCE7; border-color: #10B981; color: #166534; box-shadow: 0 4px 0 #10B981; transform: translateY(-2px); }
+        .state-p { background: #FEF3C7; border-color: #F59E0B; color: #92400E; box-shadow: 0 4px 0 #F59E0B; transform: translateY(-2px); }
+        
+        .att-btn:active { transform: translateY(2px); box-shadow: none; }
+
+        #unsavedBadge {
+            display: none;
+            position: fixed;
+            top: 20px; right: 20px;
+            background: var(--brand-danger);
+            color: white; padding: 6px 12px;
+            border-radius: 20px; font-size: 10px; font-weight: 800;
+            z-index: 100; animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Week Selector Styling */
+        .week-pill {
+            padding: 6px 12px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid #E2E8F0;
+            background: white;
+            color: #64748B;
+        }
+        .week-pill.active {
+            background: #4F46E5;
+            color: white;
+            border-color: #4F46E5;
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+        }
+    </style>
+</head>
+<body class="pb-32">
+    <div id="unsavedBadge">CHƯA LƯU</div>
+
+    <div id="loading" class="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-sm flex flex-col items-center justify-center hidden text-white">
+        <div class="w-10 h-10 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
+        <span class="mt-4 text-[10px] font-black tracking-widest uppercase">Đang xử lý...</span>
+    </div>
+
+    <header class="p-5 max-w-5xl mx-auto">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h1 class="text-xl font-black text-slate-900 tracking-tight">Gioan <span class="text-indigo-600">Attendance</span></h1>
+                <p class="text-[10px] text-slate-500 font-bold uppercase mt-1 tracking-wider">Hệ Thống Hỗ Trợ Điểm Danh Nhà Gioan</p>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="fetchData()" class="bg-white border border-slate-200 text-slate-600 p-3 rounded-2xl soft-shadow active:scale-90 transition-all">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+            <select id="sheetNameSelect" onchange="fetchData()" class="w-full bg-white border-2 border-slate-100 px-5 py-4 rounded-2xl text-sm font-bold shadow-sm outline-none focus:border-indigo-500 appearance-none">
+                <option value="">-- Chọn lớp phụ trách --</option>
+            </select>
+            
+            <!-- Tuần selector cải tiến -->
+            <div class="flex items-center gap-2 bg-slate-100/50 p-2 rounded-2xl border border-slate-200 overflow-x-auto no-scrollbar">
+                <span class="text-[9px] font-black uppercase text-slate-400 px-2 min-w-max">Chọn tuần:</span>
+                <div class="flex gap-1" id="weekSelector">
+                    <div class="week-pill" onclick="changeWeek(0)" data-week="0">W1</div>
+                    <div class="week-pill" onclick="changeWeek(1)" data-week="1">W2</div>
+                    <div class="week-pill" onclick="changeWeek(2)" data-week="2">W3</div>
+                    <div class="week-pill" onclick="changeWeek(3)" data-week="3">W4</div>
+                    <div class="week-pill" onclick="changeWeek(4)" data-week="4">W5</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="px-5 max-w-5xl mx-auto">
+        <div class="grid grid-cols-3 gap-3 mb-6 text-center">
+            <div class="bg-white p-4 rounded-2xl border border-slate-100 soft-shadow">
+                <p class="text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Sĩ số</p>
+                <div id="totalStudents" class="text-xl font-black">0</div>
+            </div>
+            <div class="bg-emerald-50 text-emerald-700 p-4 rounded-2xl border border-emerald-100 soft-shadow">
+                <p class="text-[9px] font-black opacity-60 uppercase tracking-tighter mb-1">Hiện diện</p>
+                <div id="presentCount" class="text-xl font-black">0</div>
+            </div>
+            <div class="bg-amber-50 text-amber-700 p-4 rounded-2xl border border-amber-100 soft-shadow">
+                <p class="text-[9px] font-black opacity-60 uppercase tracking-tighter mb-1">Vắng phép</p>
+                <div id="excusedCount" class="text-xl font-black">0</div>
+            </div>
+        </div>
+
+        <div class="table-wrapper soft-shadow">
+            <table id="mainTable">
+                <thead>
+                    <tr id="tableHeader">
+                        <th class="w-[50px]">ID</th>
+                        <th class="sticky-col pl-4 text-left">Học Viên</th>
+                        <th colspan="2" class="border-l border-slate-200">T.1</th>
+                        <th colspan="2" class="border-l border-slate-200">T.2</th>
+                        <th colspan="2" class="border-l border-slate-200">T.3</th>
+                        <th colspan="2" class="border-l border-slate-200">T.4</th>
+                        <th colspan="2" class="border-l border-slate-200">T.5</th>
+                        <th class="pl-4 text-left min-w-[200px]">Ghi chú</th>
+                    </tr>
+                </thead>
+                <tbody id="studentList">
+                    <tr>
+                        <td colspan="13" class="py-32 text-center opacity-30">
+                            <p class="text-xs font-black uppercase tracking-widest">Vui lòng chọn lớp</p>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <div class="fixed bottom-0 left-0 right-0 p-5 bg-white/90 backdrop-blur-xl border-t border-slate-100 z-40">
+        <div class="max-w-5xl mx-auto flex gap-3">
+            <button onclick="quickAttendance()" class="flex-none bg-indigo-50 text-indigo-600 font-black px-6 rounded-2xl active:scale-95 transition-all text-[10px] uppercase tracking-widest border border-indigo-100 flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                Có mặt cả lớp
+            </button>
+            <button onclick="saveToGoogleSheets()" id="saveBtn" class="flex-1 bg-slate-900 hover:bg-black text-white font-black py-4 rounded-2xl soft-shadow transition-all active:scale-95 text-xs uppercase tracking-widest flex items-center justify-center gap-2">
+                Lưu vào hệ thống
+            </button>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed top-6 left-1/2 -translate-x-1/2 px-6 py-3 rounded-2xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest hidden z-[100] soft-shadow"></div>
+
+    <script>
+        const CONFIG = {
+            SCRIPT_URL: "https://script.google.com/macros/s/AKfycbwHIgYuTMByA9VPG8zHyOc5KZ-iCgEwnTc2yCllQYXWo9DSWPfCgPZhVOZclPqoIVn_gw/exec",
+            SHEET_ID: "1ws4NeunJaRpoiBbHghCeFFqbZ2curS-Ypqu72S0pVwo"
+        };
+        let currentData = [];
+        let hasChanges = false;
+        let selectedWeekIndex = 0; // Tuần đang được chọn để thao tác
+
+        window.onload = () => {
+            selectedWeekIndex = getDefaultWeekIndex();
+            updateWeekUI();
+            loadSheetList();
+        };
+
+        function getDefaultWeekIndex() {
+            const day = new Date().getDate();
+            if (day <= 7) return 0;
+            if (day <= 14) return 1;
+            if (day <= 21) return 2;
+            if (day <= 28) return 3;
+            return 4;
+        }
+
+        function changeWeek(index) {
+            selectedWeekIndex = index;
+            updateWeekUI();
+            if (currentData.length > 0) renderTable(currentData);
+        }
+
+        function updateWeekUI() {
+            document.querySelectorAll('.week-pill').forEach((p, idx) => {
+                if (idx === selectedWeekIndex) p.classList.add('active');
+                else p.classList.remove('active');
+            });
+        }
+
+        function setUnsaved(status) {
+            hasChanges = status;
+            document.getElementById('unsavedBadge').style.display = status ? 'block' : 'none';
+        }
+
+        function showToast(msg, error = false) {
+            const t = document.getElementById('toast');
+            t.innerText = msg;
+            t.style.backgroundColor = error ? '#E11D48' : '#0F172A';
+            t.classList.remove('hidden');
+            setTimeout(() => t.classList.add('hidden'), 3000);
+        }
+
+        function loadSheetList() {
+            document.getElementById('loading').classList.remove('hidden');
+            const cb = 'cb_' + Date.now();
+            window[cb] = (res) => {
+                document.getElementById('loading').classList.add('hidden');
+                if (res.status === 'success') {
+                    const select = document.getElementById('sheetNameSelect');
+                    res.sheets.forEach(s => select.add(new Option(s, s)));
+                }
+            };
+            const s = document.createElement('script');
+            s.src = `${CONFIG.SCRIPT_URL}?action=getSheets&sheetId=${CONFIG.SHEET_ID}&callback=${cb}`;
+            document.body.appendChild(s);
+        }
+
+        function fetchData() {
+            const sheetName = document.getElementById('sheetNameSelect').value;
+            if (!sheetName) return;
+            if (hasChanges && !confirm("Bạn có thay đổi chưa lưu. Vẫn tiếp tục?")) return;
+
+            document.getElementById('loading').classList.remove('hidden');
+            const cb = 'cb_data_' + Date.now();
+            window[cb] = (res) => {
+                document.getElementById('loading').classList.add('hidden');
+                if (res.status === 'success') {
+                    currentData = res.data;
+                    renderTable(res.data);
+                    setUnsaved(false);
+                    showToast("Đã tải dữ liệu mới nhất");
+                }
+            };
+            const s = document.createElement('script');
+            s.src = `${CONFIG.SCRIPT_URL}?action=read&sheetId=${CONFIG.SHEET_ID}&sheetName=${encodeURIComponent(sheetName)}&callback=${cb}`;
+            document.body.appendChild(s);
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById('studentList');
+            tbody.innerHTML = '';
+            document.getElementById('totalStudents').innerText = data.length;
+            
+            data.forEach((st, idx) => {
+                const tr = document.createElement('tr');
+                if (st.isYellow) tr.style.backgroundColor = '#FFFBEB';
+                
+                let html = `
+                    <td class="text-center text-[10px] font-bold text-slate-400">${idx+1}</td>
+                    <td class="sticky-col pl-4 font-bold text-slate-700 text-sm border-r border-slate-100">${st.name}</td>
+                `;
+                
+                for (let i = 0; i < 10; i++) {
+                    const isFocus = Math.floor(i/2) === selectedWeekIndex;
+                    const val = (st.attendance && st.attendance[i]) ? st.attendance[i].toLowerCase() : "";
+                    const stateClass = val === 'x' ? 'state-x' : val === 'p' ? 'state-p' : 'state-empty';
+                    html += `<td class="px-1 ${isFocus ? 'active-week-col' : ''}">
+                        <div class="att-btn ${stateClass}" data-val="${val}" onclick="smartToggle(this)">${val}</div>
+                    </td>`;
+                }
+                
+                html += `<td class="pl-4 pr-4"><input type="text" oninput="setUnsaved(true)" value="${st.note || ''}" placeholder="..." class="w-full bg-slate-50 border-none rounded-xl py-3 px-4 text-xs font-medium focus:bg-white transition-all"></td>`;
+                tr.innerHTML = html;
+                tbody.appendChild(tr);
+            });
+            updateStats();
+        }
+
+        function smartToggle(el) {
+            const val = el.getAttribute('data-val') || "";
+            let next = "";
+            if (val === "") next = "x";
+            else if (val === "x") next = "p";
+            else next = "";
+
+            el.setAttribute('data-val', next);
+            el.innerText = next;
+            el.className = `att-btn ${next==='x'?'state-x':next==='p'?'state-p':'state-empty'}`;
+            setUnsaved(true);
+            updateStats();
+        }
+
+        function updateStats() {
+            let x = 0, p = 0;
+            document.querySelectorAll('.att-btn').forEach(b => {
+                const v = b.getAttribute('data-val');
+                if (v === 'x') x++;
+                if (v === 'p') p++;
+            });
+            document.getElementById('presentCount').innerText = x;
+            document.getElementById('excusedCount').innerText = p;
+        }
+
+        // CẢI TIẾN: Điểm danh nhanh dựa trên TUẦN ĐANG CHỌN
+        function quickAttendance() {
+            const rows = document.querySelectorAll('#studentList tr');
+            if (rows.length === 0 || !currentData.length) return;
+
+            let count = 0;
+            rows.forEach(row => {
+                const weekBtns = row.querySelectorAll('.att-btn');
+                const startIdx = selectedWeekIndex * 2;
+                
+                // Chỉ tích 'x' cho những ô trống trong tuần đang chọn
+                for(let i = startIdx; i < startIdx + 2; i++) {
+                    if (!weekBtns[i].getAttribute('data-val')) {
+                        weekBtns[i].setAttribute('data-val', 'x');
+                        weekBtns[i].innerText = 'x';
+                        weekBtns[i].className = 'att-btn state-x';
+                        count++;
+                    }
+                }
+            });
+
+            if (count > 0) {
+                updateStats();
+                setUnsaved(true);
+                showToast(`Đã tích xong tuần ${selectedWeekIndex + 1}`);
+            } else {
+                showToast("Tuần này đã có dữ liệu rồi");
+            }
+        }
+
+        async function saveToGoogleSheets() {
+            const sheetName = document.getElementById('sheetNameSelect').value;
+            if (!sheetName) return;
+            
+            document.getElementById('loading').classList.remove('hidden');
+            const rows = document.querySelectorAll('#studentList tr');
+            const payload = Array.from(rows).map((tr, i) => ({
+                rowIndex: currentData[i].originalRow,
+                attendance: Array.from(tr.querySelectorAll('.att-btn')).map(c => c.getAttribute('data-val')),
+                note: tr.querySelector('input[type="text"]').value
+            }));
+
+            try {
+                await fetch(CONFIG.SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sheetId: CONFIG.SHEET_ID, sheetName: sheetName, data: payload })
+                });
+                showToast("Đang đồng bộ...");
+                setTimeout(() => { 
+                    setUnsaved(false);
+                    fetchData(); 
+                }, 1500);
+            } catch (e) { 
+                showToast("Lỗi kết nối!", true);
+                document.getElementById('loading').classList.add('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
