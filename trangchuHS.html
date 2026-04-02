@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Gioan Attendance</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+    <style>
+        /* ══════════════════════════════════════════
+           DESIGN TOKENS
+        ══════════════════════════════════════════ */
+        :root {
+            --ink:          #0d1117;
+            --ink-muted:    #6b7280;
+            --ink-subtle:   #9ca3af;
+            --surface:      #ffffff;
+            --surface-alt:  #f9fafb;
+            --surface-dim:  #f3f4f6;
+            --border:       #e5e7eb;
+            --border-strong:#d1d5db;
+
+            --accent:       #2563eb;
+            --accent-light: #eff6ff;
+            --accent-muted: #93c5fd;
+
+            --green:        #059669;
+            --green-bg:     #ecfdf5;
+            --green-border: #a7f3d0;
+
+            --amber:        #d97706;
+            --amber-bg:     #fffbeb;
+            --amber-border: #fcd34d;
+
+            --danger:       #dc2626;
+            --danger-bg:    #fef2f2;
+
+            /* Touch target: Apple HIG / Material 3 minimum = 44px */
+            --touch-min:    52px;   /* slightly above minimum for comfort */
+            --cell-size:    52px;   /* attendance cell */
+        }
+
+        /* ══════════════════════════════════════════
+           RESET & BASE
+        ══════════════════════════════════════════ */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { height: 100%; }
+
+        body {
+            font-family: 'IBM Plex Sans', sans-serif;
+            background: var(--surface-dim);
+            color: var(--ink);
+            -webkit-font-smoothing: antialiased;
+            height: 100dvh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            /* Prevent text-size adjust on iOS rotation */
+            -webkit-text-size-adjust: 100%;
+        }
+
+        /* ══════════════════════════════════════════
+           SCROLLBAR
+        ══════════════════════════════════════════ */
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
+
+        /* ══════════════════════════════════════════
+           LAYOUT SHELL
+        ══════════════════════════════════════════ */
+        #app-header  { flex-shrink: 0; }
+        #app-toolbar { flex-shrink: 0; }
+        #app-main    { flex: 1; min-height: 0; overflow: hidden; position: relative; }
+        #app-footer  { flex-shrink: 0; }
+
+        /* ══════════════════════════════════════════
+           TABLE ENGINE
+        ══════════════════════════════════════════ */
+        table { border-collapse: separate; border-spacing: 0; }
+        th, td { border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); }
+
+        /* Sticky: STT col */
+        .col-stt {
+            position: sticky; left: 0; z-index: 20; background: inherit;
+            width: 40px; min-width: 40px; max-width: 40px;
+        }
+        /* Sticky: Name col */
+        .col-name {
+            position: sticky; left: 40px; z-index: 20; background: inherit;
+            min-width: 160px;
+        }
+        /* Shadow when scrolled right */
+        .col-name::after {
+            content: '';
+            position: absolute; right: -12px; top: 0; bottom: 0; width: 12px;
+            pointer-events: none;
+            background: linear-gradient(to right, rgba(0,0,0,0.07), transparent);
+        }
+
+        /* Sticky header rows */
+        thead tr:nth-child(1) th { position: sticky; top: 0;     z-index: 30; }
+        thead tr:nth-child(2) th { position: sticky; top: 36px;  z-index: 30; }
+        thead tr:nth-child(3) th { position: sticky; top: 68px;  z-index: 30; }
+
+        /* Week separator */
+        .week-sep { border-right: 2px solid var(--border-strong) !important; }
+
+        /* ══════════════════════════════════════════
+           ATTENDANCE CELL — MOBILE OPTIMIZED
+           Min 52×52px, large tap zone, clear states
+        ══════════════════════════════════════════ */
+        .cell-btn {
+            width:  var(--cell-size);
+            height: var(--cell-size);
+            min-width:  var(--cell-size);
+            min-height: var(--cell-size);
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'IBM Plex Mono', monospace;
+            font-weight: 800;
+            font-size: 16px;
+            cursor: pointer;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            transition: transform 0.12s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.12s;
+            /* Raised button: margin tạo khoảng cách, border-radius bo tròn */
+            margin: 5px;
+            width: calc(var(--cell-size) - 10px);
+            height: calc(var(--cell-size) - 10px);
+            min-width: calc(var(--cell-size) - 10px);
+            min-height: calc(var(--cell-size) - 10px);
+            border-radius: 12px;
+        }
+
+        /* Touch feedback — spring bounce */
+        .cell-btn:active {
+            transform: scale(0.84);
+            transition: transform 0.07s;
+        }
+
+        /* EMPTY state — subtle ghost button */
+        .s-empty {
+            color: #94a3b8;
+            background: var(--surface-dim);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+            border: 1.5px solid var(--border);
+        }
+        .s-empty:hover {
+            background: #e2e8f0;
+            color: var(--ink-muted);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+
+        /* PRESENT (v) — green raised */
+        .s-x {
+            background: linear-gradient(145deg, #34d399, #059669);
+            color: #fff;
+            box-shadow:
+                0 4px 0 #047857,
+                0 5px 8px rgba(5,150,105,0.35);
+            border: none;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.15);
+        }
+        .s-x:active {
+            box-shadow: 0 1px 0 #047857, 0 2px 4px rgba(5,150,105,0.3);
+            transform: translateY(3px) scale(0.93);
+        }
+
+        /* EXCUSED (p) — amber raised */
+        .s-p {
+            background: linear-gradient(145deg, #fbbf24, #d97706);
+            color: #fff;
+            box-shadow:
+                0 4px 0 #b45309,
+                0 5px 8px rgba(217,119,6,0.35);
+            border: none;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.15);
+        }
+        .s-p:active {
+            box-shadow: 0 1px 0 #b45309, 0 2px 4px rgba(217,119,6,0.3);
+            transform: translateY(3px) scale(0.93);
+        }
+
+        /* Week highlight */
+        td.col-active  { background: #dbeafe; }
+        td.col-dimmed  { opacity: 0.20; pointer-events: none; }
+
+        /* Active cell ring */
+        .cell-ring { outline: 2.5px solid var(--accent) !important; outline-offset: 2px; }
+
+        /* ══════════════════════════════════════════
+           NOTE INPUT
+        ══════════════════════════════════════════ */
+        .note-field {
+            width: 100%;
+            height: var(--touch-min);
+            padding: 0 14px;
+            border: none; background: transparent;
+            font-size: 14px;
+            font-family: 'IBM Plex Sans', sans-serif;
+            outline: none; color: var(--ink);
+            min-width: 180px;
+            /* Prevent iOS zoom on focus (font must be ≥16px equiv) */
+            font-size: 16px;
+        }
+        .note-field:focus {
+            background: var(--accent-light);
+            box-shadow: inset 0 0 0 2px var(--accent-muted);
+        }
+        .note-field::placeholder { color: var(--ink-subtle); font-size: 14px; }
+
+        /* ══════════════════════════════════════════
+           WEEK PILLS — thumb-friendly height
+        ══════════════════════════════════════════ */
+        .week-pill {
+            height: 38px;
+            padding: 0 16px;
+            border-radius: 8px;
+            font-size: 13px; font-weight: 700;
+            white-space: nowrap;
+            border: 1.5px solid var(--border);
+            background: var(--surface);
+            color: var(--ink-muted);
+            cursor: pointer;
+            transition: all 0.15s;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            display: inline-flex; align-items: center; justify-content: center;
+        }
+        .week-pill:active { transform: scale(0.94); }
+        .week-pill.active {
+            background: var(--accent); color: #fff;
+            border-color: var(--accent);
+            box-shadow: 0 3px 10px rgba(37,99,235,0.3);
+        }
+
+        /* ══════════════════════════════════════════
+           STAT CARDS
+        ══════════════════════════════════════════ */
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 8px 12px;
+            display: flex; flex-direction: column; gap: 2px;
+        }
+        .stat-label {
+            font-size: 9px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--ink-subtle);
+            white-space: nowrap;
+        }
+        .stat-value {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 22px; font-weight: 700;
+            line-height: 1;
+        }
+
+        /* ══════════════════════════════════════════
+           BUTTONS — all ≥44px tall
+        ══════════════════════════════════════════ */
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+            font-size: 14px; font-weight: 700;
+            border-radius: 10px;
+            height: var(--touch-min);
+            padding: 0 18px;
+            transition: all 0.15s;
+            cursor: pointer; border: none;
+            font-family: 'IBM Plex Sans', sans-serif;
+            white-space: nowrap;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .btn:active { transform: scale(0.95); transition: transform 0.08s; }
+        .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none !important; }
+
+        .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 2px 8px rgba(37,99,235,0.25); }
+        .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+
+        .btn-ghost {
+            background: var(--surface); color: var(--ink-muted);
+            border: 1.5px solid var(--border);
+        }
+        .btn-ghost:hover:not(:disabled) { background: var(--surface-dim); color: var(--ink); }
+
+        .btn-success {
+            background: var(--green-bg); color: var(--green);
+            border: 1.5px solid var(--green-border);
+        }
+        .btn-success:active { filter: brightness(0.94); }
+
+        /* Save btn states */
+        #saveBtn.dirty {
+            background: var(--accent); color: #fff; border: none;
+            animation: pulse-save 2s ease-in-out infinite;
+        }
+        #saveBtn.clean {
+            background: var(--green-bg); color: var(--green);
+            border: 1.5px solid var(--green-border);
+        }
+        @keyframes pulse-save {
+            0%,100% { box-shadow: 0 0 0 0 rgba(37,99,235,0.4); }
+            50%      { box-shadow: 0 0 0 8px rgba(37,99,235,0); }
+        }
+
+        /* ══════════════════════════════════════════
+           LOADING OVERLAY
+        ══════════════════════════════════════════ */
+        #loading {
+            position: fixed; inset: 0; z-index: 200;
+            background: rgba(255,255,255,0.88);
+            backdrop-filter: blur(6px);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            gap: 14px;
+        }
+        #loading.hidden { display: none; }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.65s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ══════════════════════════════════════════
+           TOAST — above mobile footer safe area
+        ══════════════════════════════════════════ */
+        #toast {
+            position: fixed;
+            bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+            left: 50%;
+            transform: translateX(-50%) translateY(16px);
+            z-index: 300;
+            background: #1e293b;
+            color: #fff;
+            font-size: 14px; font-weight: 600;
+            padding: 12px 20px;
+            border-radius: 12px;
+            display: flex; align-items: center; gap: 10px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.22s, transform 0.22s;
+            max-width: calc(100vw - 32px);
+            white-space: nowrap;
+        }
+        #toast.show  { opacity: 1; transform: translateX(-50%) translateY(0); }
+        #toast.t-err { background: var(--danger); }
+        #toast.t-ok  { background: #065f46; }
+
+        /* ══════════════════════════════════════════
+           EMPTY STATE
+        ══════════════════════════════════════════ */
+        .empty-state {
+            padding: 60px 24px; text-align: center; color: var(--ink-subtle);
+        }
+        .empty-state svg { width: 48px; height: 48px; margin: 0 auto 14px; opacity: 0.3; display: block; }
+        .empty-state p { font-size: 14px; font-weight: 500; }
+
+        /* ══════════════════════════════════════════
+           SELECT
+        ══════════════════════════════════════════ */
+        .select-styled {
+            appearance: none;
+            background: var(--surface);
+            border: 1.5px solid var(--border);
+            border-radius: 10px;
+            padding: 0 38px 0 14px;
+            height: var(--touch-min);
+            font-size: 14px; font-weight: 700;
+            color: var(--ink);
+            font-family: 'IBM Plex Sans', sans-serif;
+            outline: none; cursor: pointer;
+            min-width: 160px;
+            touch-action: manipulation;
+        }
+        .select-styled:focus { border-color: var(--accent); }
+
+        /* ══════════════════════════════════════════
+           YELLOW STUDENT HIGHLIGHT
+        ══════════════════════════════════════════ */
+        tr.is-yellow td.col-stt,
+        tr.is-yellow td.col-name { background: #fffbeb !important; }
+
+        /* ══════════════════════════════════════════
+           HEADER
+        ══════════════════════════════════════════ */
+        #app-header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* Mobile header: compact 1-line brand + controls, stats below */
+        .header-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 10px 14px 8px;
+        }
+        .header-stats {
+            display: flex;
+            gap: 6px;
+            padding: 0 14px 10px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .header-stats::-webkit-scrollbar { display: none; }
+
+        /* Desktop: merge into single row */
+        @media (min-width: 768px) {
+            .header-top {
+                flex-wrap: wrap;
+                padding: 12px 20px;
+            }
+            .header-stats {
+                padding: 0 20px 12px;
+            }
+        }
+        @media (min-width: 1024px) {
+            #app-header > div {
+                display: flex; align-items: center;
+                padding: 10px 20px; gap: 12px; flex-wrap: wrap;
+            }
+            .header-top { padding: 0; border-bottom: none; flex: 0 0 auto; }
+            .header-stats { padding: 0; flex: 1; justify-content: center; }
+        }
+
+        /* ══════════════════════════════════════════
+           TOOLBAR
+        ══════════════════════════════════════════ */
+        #app-toolbar {
+            background: var(--surface-alt);
+            border-bottom: 1px solid var(--border);
+            padding: 8px 14px;
+        }
+        .toolbar-inner {
+            display: flex; align-items: center; gap: 8px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .toolbar-inner::-webkit-scrollbar { display: none; }
+
+        @media (min-width: 768px) {
+            #app-toolbar { padding: 8px 20px; }
+        }
+
+        /* ══════════════════════════════════════════
+           FOOTER — bottom action bar
+           Positioned safely above iOS home indicator
+        ══════════════════════════════════════════ */
+        #app-footer {
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            padding: 10px 14px;
+            padding-bottom: max(10px, env(safe-area-inset-bottom, 10px));
+        }
+        .footer-inner {
+            display: flex; align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        .footer-actions {
+            display: flex; gap: 8px; flex: 1; justify-content: flex-end;
+        }
+
+        /* On very small screens, stack status below buttons */
+        @media (max-width: 380px) {
+            .footer-inner { flex-wrap: wrap; }
+            .footer-actions { width: 100%; }
+            .footer-actions .btn { flex: 1; }
+        }
+
+        @media (min-width: 768px) {
+            #app-footer { padding: 10px 20px; }
+        }
+
+        /* ══════════════════════════════════════════
+           TABLE CONTAINER — smooth touch scroll
+        ══════════════════════════════════════════ */
+        #tableContainer {
+            height: 100%;
+            overflow: auto;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+        }
+
+        /* Table cell rows height = touch target */
+        #studentList tr td { height: var(--cell-size); }
+
+        /* ══════════════════════════════════════════
+           RESPONSIVE TABLE CELLS
+        ══════════════════════════════════════════ */
+        @media (max-width: 767px) {
+            :root {
+                --cell-size: 52px;   /* keep 52px on mobile for easy tap */
+            }
+            .col-name { min-width: 150px; }
+            .stat-value { font-size: 20px; }
+        }
+
+        @media (min-width: 768px) {
+            :root {
+                --cell-size: 44px;   /* desktop can be slightly smaller */
+            }
+        }
+
+        /* ══════════════════════════════════════════
+           UNSAVED INDICATOR — mobile badge style
+        ══════════════════════════════════════════ */
+        #statusDot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--border-strong);
+            display: inline-block; flex-shrink: 0;
+            transition: background 0.3s;
+        }
+        .status-dirty #statusDot { background: #ef4444; animation: blink 1.4s ease-in-out infinite; }
+        .status-clean #statusDot { background: #10b981; animation: none; }
+        @keyframes blink {
+            0%,100% { opacity: 1; } 50% { opacity: 0.3; }
+        }
+
+        /* ══════════════════════════════════════════
+           LEGEND BADGES (toolbar)
+        ══════════════════════════════════════════ */
+        .legend-badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            font-size: 11px; font-weight: 700;
+            padding: 4px 10px; border-radius: 6px;
+            white-space: nowrap; flex-shrink: 0;
+        }
+        .legend-x {
+            background: var(--green-bg); color: var(--green);
+            border: 1px solid var(--green-border);
+        }
+        .legend-p {
+            background: var(--amber-bg); color: var(--amber);
+            border: 1px solid var(--amber-border);
+        }
+    </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════
+     LOADING OVERLAY
+══════════════════════════════════ -->
+<div id="loading" class="hidden">
+    <div class="spinner"></div>
+    <p style="font-size:12px;font-weight:700;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.06em;">Đang tải...</p>
+</div>
+
+<!-- ══════════════════════════════════
+     TOAST
+══════════════════════════════════ -->
+<div id="toast">
+    <svg id="toastIcon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"></svg>
+    <span id="toastMsg"></span>
+</div>
+
+<!-- ══════════════════════════════════
+     HEADER
+     Mobile: 2 rows (brand+controls / stats)
+     Desktop: 1 merged row
+══════════════════════════════════ -->
+<header id="app-header">
+    <!-- Row 1: Brand + Sheet selector + Refresh -->
+    <div class="header-top">
+        <!-- Brand -->
+        <div style="display:flex;align-items:center;gap:9px;flex-shrink:0;">
+            <div style="width:34px;height:34px;background:var(--accent);border-radius:9px;display:flex;align-items:center;justify-content:center;">
+                <svg width="18" height="18" fill="none" stroke="#fff" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                </svg>
+            </div>
+            <div>
+                <div style="font-size:15px;font-weight:700;letter-spacing:-0.02em;line-height:1.2;">Gioan <span style="color:var(--accent);">Attendance</span></div>
+                <div style="font-size:10px;font-weight:600;color:var(--ink-subtle);text-transform:uppercase;letter-spacing:0.07em;">Điểm danh</div>
+            </div>
+        </div>
+
+        <!-- Controls: Sheet selector + Refresh -->
+        <div style="display:flex;align-items:center;gap:8px;">
+            <div style="position:relative;">
+                <select id="sheetNameSelect" class="select-styled" onchange="onSheetChange()">
+                    <option value="">Chọn lớp...</option>
+                </select>
+                <svg style="position:absolute;right:11px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--ink-muted);" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path d="M19 9l-7 7-7-7"/>
+                </svg>
+            </div>
+            <button class="btn btn-ghost" onclick="refreshData()" title="Làm mới" style="padding:0;width:var(--touch-min);">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" d="M4 4v5h5M20 20v-5h-5M4 9a8 8 0 0115 0M20 15a8 8 0 01-15 0"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Row 2: Scrollable stats strip -->
+    <div class="header-stats">
+        <div class="stat-card" style="min-width:64px;">
+            <div class="stat-label">Sĩ số</div>
+            <div class="stat-value" id="totalStudents" style="color:var(--ink);">—</div>
+        </div>
+        <div class="stat-card" style="background:var(--green-bg);border-color:var(--green-border);min-width:80px;">
+            <div class="stat-label" id="statLabelPresent" style="color:var(--green);">Có mặt (x)</div>
+            <div class="stat-value" id="presentCount" style="color:var(--green);">—</div>
+        </div>
+        <div class="stat-card" style="background:var(--amber-bg);border-color:var(--amber-border);min-width:80px;">
+            <div class="stat-label" id="statLabelExcused" style="color:var(--amber);">Có phép (p)</div>
+            <div class="stat-value" id="excusedCount" style="color:var(--amber);">—</div>
+        </div>
+        <div class="stat-card" style="background:var(--accent-light);border-color:var(--accent-muted);min-width:72px;">
+            <div class="stat-label" id="statLabelAbsent" style="color:var(--accent);">Vắng</div>
+            <div class="stat-value" id="absentCount" style="color:var(--accent);">—</div>
+        </div>
+    </div>
+</header>
+
+<!-- ══════════════════════════════════
+     TOOLBAR — week selector + legend
+══════════════════════════════════ -->
+<div id="app-toolbar">
+    <div class="toolbar-inner">
+        <span style="font-size:11px;font-weight:700;color:var(--ink-subtle);text-transform:uppercase;letter-spacing:0.07em;flex-shrink:0;">Tuần:</span>
+        <button class="week-pill active" onclick="changeWeek(0)">T1</button>
+        <button class="week-pill"        onclick="changeWeek(1)">T2</button>
+        <button class="week-pill"        onclick="changeWeek(2)">T3</button>
+        <button class="week-pill"        onclick="changeWeek(3)">T4</button>
+        <button class="week-pill"        onclick="changeWeek(4)">T5</button>
+        <!-- Spacer -->
+        <div style="flex:1;min-width:6px;"></div>
+        <!-- Legend -->
+        <span class="legend-badge legend-x">x = có mặt</span>
+        <span class="legend-badge legend-p">p = có phép</span>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════
+     MAIN TABLE AREA
+══════════════════════════════════ -->
+<main id="app-main">
+    <div id="tableContainer" class="custom-scrollbar">
+        <table id="mainTable" style="width:100%;">
+            <thead id="tableHead"></thead>
+            <tbody id="studentList">
+                <tr>
+                    <td colspan="24" style="border:none;">
+                        <div class="empty-state">
+                            <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                            <p>Chọn lớp học để bắt đầu điểm danh</p>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</main>
+
+<!-- ══════════════════════════════════
+     FOOTER — thumb-zone action bar
+     Buttons at bottom = easiest to reach
+══════════════════════════════════ -->
+<footer id="app-footer">
+    <div class="footer-inner">
+        <!-- Status indicator -->
+        <div id="statusArea" style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:var(--ink-subtle);flex-shrink:0;">
+            <span id="statusDot"></span>
+            <span id="statusText">Chưa có dữ liệu</span>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="footer-actions">
+            <button class="btn btn-success" onclick="quickAttendance()" id="quickBtn">
+                <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" d="M5 13l4 4L19 7"/>
+                </svg>
+                <span>Điểm nhanh T<span id="lblQuickBtn">1</span></span>
+            </button>
+            <button class="btn btn-primary" id="saveBtn" onclick="saveToGoogleSheets()">
+                <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                </svg>
+                <span id="saveText">Lưu lên Sheets</span>
+            </button>
+        </div>
+    </div>
+</footer>
+
+<!-- ══════════════════════════════════
+     JAVASCRIPT — logic unchanged
+══════════════════════════════════ -->
+<script>
+// ─── CONFIG ──────────────────────────────────────────────────
+var CONFIG = {
+    SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzl0jgz07FEaE9MVdDSTW7KcbdAUehse8cv5A0hm_pIcYLli73N7HnTLMa2AnB1_tVTWg/exec',
+    SHEET_ID:   '1mxhnTirMWMuMMBkxHEv_un7VuplKOh1IWE5JIuRbggg',
+    WEEKS:      5,
+    SESSIONS:   4,
+    LABELS:     ['T1','T2','T3','T4']
+};
+
+// ─── STATE ───────────────────────────────────────────────────
+var state = { data: [], hasChanges: false, week: 0, activeCell: null };
+
+// ─── INIT ────────────────────────────────────────────────────
+window.onload = function() {
+    state.week = getDefaultWeek();
+    buildTableHead();
+    updateWeekUI();
+    loadSheetList();
+    setupKeyboard();
+};
+
+function getDefaultWeek() {
+    var d = new Date().getDate();
+    if (d <= 7)  return 0;
+    if (d <= 14) return 1;
+    if (d <= 21) return 2;
+    if (d <= 28) return 3;
+    return 4;
+}
+
+// ─── TABLE HEAD ──────────────────────────────────────────────
+function buildTableHead() {
+    var now = new Date();
+    var W = CONFIG.WEEKS, S = CONFIG.SESSIONS;
+    var CELL = 'width:var(--cell-size);min-width:var(--cell-size);';
+
+    // Row 1: banner
+    var r1 = '<tr style="background:var(--ink);color:#fff;height:36px;">'
+        + '<th class="col-stt" colspan="2" style="background:var(--ink);text-align:left;padding:0 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">Danh sách</th>'
+        + '<th colspan="'+(W*S)+'" style="text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">ĐIỂM DANH THÁNG '+(now.getMonth()+1)+' — '+now.getFullYear()+'</th>'
+        + '<th style="background:var(--ink);text-align:right;padding:0 10px;font-size:10px;opacity:0.45;">Ghi chú</th>'
+        + '</tr>';
+
+    // Row 2: week group headers
+    var r2 = '<tr style="background:var(--surface-dim);height:32px;font-size:11px;font-weight:700;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.04em;">'
+        + '<th class="col-stt" style="background:var(--surface-dim);text-align:center;font-size:10px;">STT</th>'
+        + '<th class="col-name" style="background:var(--surface-dim);text-align:left;padding:0 10px;">Tên thánh, Họ và Tên</th>';
+    for (var w = 0; w < W; w++) {
+        r2 += '<th colspan="'+S+'" class="week-sep" style="text-align:center;">Tuần '+(w+1)+'</th>';
+    }
+    r2 += '<th style="text-align:left;padding:0 10px;min-width:180px;"></th></tr>';
+
+    // Row 3: session labels T1–T4
+    var r3 = '<tr style="background:var(--surface-dim);height:28px;font-size:10px;font-weight:700;color:var(--ink-subtle);">'
+        + '<th class="col-stt" colspan="2" style="background:var(--surface-dim);"></th>';
+    for (var w2 = 0; w2 < W; w2++) {
+        for (var s = 0; s < S; s++) {
+            var isEnd = (s === S-1);
+            r3 += '<th style="text-align:center;'+CELL+(isEnd?'border-right:2px solid var(--border-strong)!important;':'')+'">'+CONFIG.LABELS[s]+'</th>';
+        }
+    }
+    r3 += '<th></th></tr>';
+
+    document.getElementById('tableHead').innerHTML = r1 + r2 + r3;
+}
+
+// ─── JSONP ───────────────────────────────────────────────────
+function jsonpCall(url, done) {
+    var id = 'cb_' + Date.now();
+    window[id] = function(data) {
+        delete window[id];
+        var el = document.getElementById(id);
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+        done(null, data);
+    };
+    var s = document.createElement('script');
+    s.id = id;
+    s.onerror = function() {
+        delete window[id];
+        if (s.parentNode) s.parentNode.removeChild(s);
+        done(new Error('script error'));
+    };
+    s.src = url + '&callback=' + id;
+    document.body.appendChild(s);
+}
+
+// ─── LOAD SHEET LIST ─────────────────────────────────────────
+function loadSheetList() {
+    showLoading(true);
+    jsonpCall(CONFIG.SCRIPT_URL + '?action=getSheets&sheetId=' + CONFIG.SHEET_ID, function(err, res) {
+        showLoading(false);
+        if (err || !res || res.status !== 'success') {
+            showToast('Không lấy được danh sách lớp', 'err'); return;
+        }
+        var sel = document.getElementById('sheetNameSelect');
+        res.sheets.forEach(function(name) {
+            var opt = document.createElement('option');
+            opt.value = name; opt.textContent = name;
+            sel.appendChild(opt);
+        });
+        if (res.sheets.length > 0) { sel.value = res.sheets[0]; fetchData(); }
+    });
+}
+
+// ─── SHEET CHANGE / REFRESH ──────────────────────────────────
+function onSheetChange() {
+    if (state.hasChanges && !confirm('Dữ liệu chưa lưu sẽ bị mất. Tiếp tục?')) return;
+    fetchData();
+}
+function refreshData() {
+    if (state.hasChanges && !confirm('Dữ liệu chưa lưu sẽ bị mất. Làm mới?')) return;
+    fetchData();
+}
+
+// ─── FETCH DATA ──────────────────────────────────────────────
+function fetchData() {
+    var sheetName = document.getElementById('sheetNameSelect').value;
+    if (!sheetName) return;
+    showLoading(true);
+    jsonpCall(
+        CONFIG.SCRIPT_URL + '?action=read&sheetId=' + CONFIG.SHEET_ID + '&sheetName=' + encodeURIComponent(sheetName),
+        function(err, res) {
+            showLoading(false);
+            if (err || !res || res.status !== 'success') { showToast('Lỗi tải dữ liệu', 'err'); return; }
+            state.data = res.data;
+            renderTable();
+            setUnsaved(false);
+            updateStats();
+            showToast('Đã tải ' + res.data.length + ' học viên');
+        }
+    );
+}
+
+// ─── RENDER TABLE ────────────────────────────────────────────
+function renderTable() {
+    var tbody = document.getElementById('studentList');
+    tbody.innerHTML = '';
+    if (!state.data.length) {
+        tbody.innerHTML = '<tr><td colspan="24" style="border:none;"><div class="empty-state"><p>Lớp này chưa có học viên</p></div></td></tr>';
+        return;
+    }
+    var W = CONFIG.WEEKS, S = CONFIG.SESSIONS;
+    var frag = document.createDocumentFragment();
+
+    state.data.forEach(function(student, rowIdx) {
+        if (!student.attendance) student.attendance = [];
+        while (student.attendance.length < W * S) student.attendance.push('');
+
+        var tr = document.createElement('tr');
+        tr.style.background = 'var(--surface)';
+        if (student.isYellow) tr.classList.add('is-yellow');
+
+        // ── STT cell
+        var tdS = document.createElement('td');
+        tdS.className = 'col-stt';
+        tdS.style.cssText = 'text-align:center;font-family:"IBM Plex Mono",monospace;font-size:12px;font-weight:600;color:var(--ink-subtle);';
+        if (student.isYellow) tdS.style.background = '#fffbeb';
+        tdS.textContent = student.stt || (rowIdx + 1);
+        tr.appendChild(tdS);
+
+        // ── Name cell
+        var tdN = document.createElement('td');
+        tdN.className = 'col-name';
+        tdN.style.cssText = 'padding:0 12px;font-size:14px;font-weight:600;color:var(--ink);';
+        if (student.isYellow) tdN.style.background = '#fffbeb';
+        tdN.textContent = student.name;
+        tr.appendChild(tdN);
+
+        // ── 20 attendance cells
+        for (var w = 0; w < W; w++) {
+            for (var s = 0; s < S; s++) {
+                var col    = w * S + s;
+                var v      = (student.attendance[col] || '').toLowerCase().trim();
+                var isEnd  = (s === S - 1);
+                var focus  = (w === state.week);
+
+                var td = document.createElement('td');
+                td.style.cssText = 'padding:0;' + (isEnd ? 'border-right:2px solid var(--border-strong);' : '');
+                td.classList.add(focus ? 'col-active' : 'col-dimmed');
+
+                var btn = document.createElement('div');
+                btn.className = 'cell-btn';
+                btn.dataset.row = rowIdx;
+                btn.dataset.col = col;
+                btn.dataset.val = v;
+                applyState(btn, v);
+
+                (function(b, r, c) {
+                    b.addEventListener('click', function() { handleCell(b, r, c); });
+                })(btn, rowIdx, col);
+
+                td.appendChild(btn);
+                tr.appendChild(td);
+            }
+        }
+
+        // ── Note cell
+        var tdNote = document.createElement('td');
+        tdNote.style.padding = '0';
+        var inp = document.createElement('input');
+        inp.type = 'text'; inp.className = 'note-field';
+        inp.placeholder = 'Ghi chú...'; inp.value = student.note || '';
+        (function(r) {
+            inp.addEventListener('input', function() { state.data[r].note = inp.value; setUnsaved(true); });
+        })(rowIdx);
+        tdNote.appendChild(inp);
+        tr.appendChild(tdNote);
+
+        frag.appendChild(tr);
+    });
+    tbody.appendChild(frag);
+}
+
+// ─── CELL STATE ──────────────────────────────────────────────
+function applyState(btn, val) {
+    btn.classList.remove('s-empty', 's-x', 's-p');
+    if (val === 'x')      { btn.classList.add('s-x'); btn.textContent = '✓'; }
+    else if (val === 'p') { btn.classList.add('s-p'); btn.textContent = 'p'; }
+    else                  { btn.classList.add('s-empty'); btn.textContent = ''; }
+}
+
+function handleCell(btn, row, col) {
+    var cur  = btn.dataset.val || '';
+    var next = cur === '' ? 'x' : cur === 'x' ? 'p' : '';
+    state.data[row].attendance[col] = next;
+    btn.dataset.val = next;
+    applyState(btn, next);
+    setActiveCell(row, col);
+    setUnsaved(true);
+    updateStats();
+}
+
+// ─── WEEK NAV ────────────────────────────────────────────────
+function changeWeek(w) {
+    if (w === state.week) return;
+    if (state.hasChanges) {
+        if (!confirm('Tuần ' + (state.week+1) + ' chưa được lưu.\nBạn có muốn chuyển sang Tuần ' + (w+1) + ' không?\n(Dữ liệu đã nhập vẫn được giữ, chỉ cần lưu trước khi chuyển để an toàn)')) {
+            updateWeekUI(); return;
+        }
+    }
+    state.week = w;
+    updateWeekUI();
+    applyWeekHighlight();
+    updateStats();
+}
+
+function updateWeekUI() {
+    document.querySelectorAll('.week-pill').forEach(function(p, i) {
+        p.classList.toggle('active', i === state.week);
+    });
+    document.getElementById('lblQuickBtn').textContent = state.week + 1;
+}
+
+function applyWeekHighlight() {
+    var W = CONFIG.WEEKS, S = CONFIG.SESSIONS;
+    document.querySelectorAll('#studentList tr').forEach(function(tr) {
+        var tds = tr.querySelectorAll('td');
+        for (var w = 0; w < W; w++) {
+            for (var s = 0; s < S; s++) {
+                var td = tds[2 + w * S + s];
+                if (!td) continue;
+                if (w === state.week) { td.classList.add('col-active'); td.classList.remove('col-dimmed'); }
+                else                  { td.classList.remove('col-active'); td.classList.add('col-dimmed'); }
+            }
+        }
+    });
+}
+
+// ─── QUICK ATTENDANCE ────────────────────────────────────────
+function quickAttendance() {
+    if (!state.data.length) { showToast('Chưa có dữ liệu', 'err'); return; }
+    var S = CONFIG.SESSIONS, start = state.week * S, changed = false;
+    state.data.forEach(function(student, ri) {
+        for (var c = start; c < start + S; c++) {
+            if (!student.attendance[c]) {
+                student.attendance[c] = 'x';
+                var b = document.querySelector('.cell-btn[data-row="'+ri+'"][data-col="'+c+'"]');
+                if (b) { b.dataset.val = 'x'; applyState(b, 'x'); }
+                changed = true;
+            }
+        }
+    });
+    if (changed) { setUnsaved(true); updateStats(); showToast('Đã điểm danh nhanh Tuần '+(state.week+1)); }
+    else showToast('Tuần '+(state.week+1)+' đã điểm danh đầy đủ');
+}
+
+// ─── SAVE ────────────────────────────────────────────────────
+function saveToGoogleSheets() {
+    var sheetName = document.getElementById('sheetNameSelect').value;
+    if (!sheetName || !state.data.length) { showToast('Chưa có dữ liệu', 'err'); return; }
+    document.getElementById('saveBtn').disabled = true;
+    showLoading(true);
+    var payload = state.data.map(function(s) {
+        return { rowIndex: s.originalRow, attendance: s.attendance.map(function(v){return v||'';}), note: s.note||'' };
+    });
+    fetch(CONFIG.SCRIPT_URL, {
+        method: 'POST', mode: 'no-cors',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({sheetId: CONFIG.SHEET_ID, sheetName: sheetName, data: payload})
+    }).then(function() {
+        showLoading(false);
+        document.getElementById('saveBtn').disabled = false;
+        setUnsaved(false);
+        showToast('Đã lưu thành công lên Google Sheets', 'ok');
+    }).catch(function() {
+        showLoading(false);
+        document.getElementById('saveBtn').disabled = false;
+        showToast('Lỗi kết nối, thử lại', 'err');
+    });
+}
+
+// ─── STATS — theo tuần đang chọn ─────────────────────────────
+function updateStats() {
+    var S = CONFIG.SESSIONS, start = state.week * S;
+    var x = 0, p = 0;
+    state.data.forEach(function(s) {
+        for (var c = start; c < start + S; c++) {
+            var v = (s.attendance && s.attendance[c]) || '';
+            if (v === 'x') x++; else if (v === 'p') p++;
+        }
+    });
+    var totalWeek = state.data.length * S;
+    var wLabel    = 'Tuần ' + (state.week + 1);
+    document.getElementById('totalStudents').textContent = state.data.length;
+    document.getElementById('presentCount').textContent  = x;
+    document.getElementById('excusedCount').textContent  = p;
+    document.getElementById('absentCount').textContent   = totalWeek - x - p;
+    var lp = document.getElementById('statLabelPresent');
+    var le = document.getElementById('statLabelExcused');
+    var la = document.getElementById('statLabelAbsent');
+    if (lp) lp.textContent = 'Có mặt (x) — ' + wLabel;
+    if (le) le.textContent = 'Có phép (p) — ' + wLabel;
+    if (la) la.textContent = 'Vắng — ' + wLabel;
+}
+
+// ─── UNSAVED STATE ───────────────────────────────────────────
+function setUnsaved(dirty) {
+    state.hasChanges = dirty;
+    var area = document.getElementById('statusArea');
+    var txt  = document.getElementById('statusText');
+    var btn  = document.getElementById('saveBtn');
+    var stxt = document.getElementById('saveText');
+    if (dirty) {
+        area.classList.add('status-dirty'); area.classList.remove('status-clean');
+        txt.textContent = 'Có thay đổi chưa lưu'; txt.style.color = '#ef4444';
+        btn.className = 'btn btn-primary dirty'; stxt.textContent = 'Lưu ngay';
+    } else {
+        area.classList.add('status-clean'); area.classList.remove('status-dirty');
+        txt.textContent = 'Đã đồng bộ'; txt.style.color = 'var(--green)';
+        btn.className = 'btn btn-primary clean'; stxt.textContent = 'Đã lưu';
+    }
+}
+
+// ─── ACTIVE CELL ─────────────────────────────────────────────
+function setActiveCell(row, col) {
+    document.querySelectorAll('.cell-ring').forEach(function(b) {
+        b.style.boxShadow = ''; b.classList.remove('cell-ring');
+    });
+    state.activeCell = {row: row, col: col};
+    var b = document.querySelector('.cell-btn[data-row="'+row+'"][data-col="'+col+'"]');
+    if (b) { b.classList.add('cell-ring'); }
+}
+
+// ─── KEYBOARD ────────────────────────────────────────────────
+function setupKeyboard() {
+    document.addEventListener('keydown', function(e) {
+        if (document.activeElement.tagName === 'INPUT') return;
+        if (!state.activeCell) return;
+        var r = state.activeCell.row, c = state.activeCell.col;
+        var maxR = state.data.length - 1, maxC = CONFIG.WEEKS * CONFIG.SESSIONS - 1;
+        var nr = r, nc = c;
+        if      (e.key === 'ArrowUp')    nr = Math.max(0, r-1);
+        else if (e.key === 'ArrowDown')  nr = Math.min(maxR, r+1);
+        else if (e.key === 'ArrowLeft')  nc = Math.max(0, c-1);
+        else if (e.key === 'ArrowRight') nc = Math.min(maxC, c+1);
+        else if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            var b = document.querySelector('.cell-btn[data-row="'+r+'"][data-col="'+c+'"]');
+            if (b) handleCell(b, r, c);
+            return;
+        } else return;
+        e.preventDefault();
+        var nw = Math.floor(nc / CONFIG.SESSIONS);
+        if (nw !== state.week) {
+            if (state.hasChanges) {
+                var wStart = state.week * CONFIG.SESSIONS, wEnd = wStart + CONFIG.SESSIONS - 1;
+                nc = (nc < wStart) ? wStart : wEnd;
+            } else {
+                changeWeek(nw);
+            }
+        }
+        setActiveCell(nr, nc);
+    });
+}
+
+// ─── UI HELPERS ──────────────────────────────────────────────
+function showLoading(v) { document.getElementById('loading').classList.toggle('hidden', !v); }
+
+var _tt;
+function showToast(msg, type) {
+    var t   = document.getElementById('toast');
+    var ico = document.getElementById('toastIcon');
+    document.getElementById('toastMsg').textContent = msg;
+    t.classList.remove('t-err', 't-ok');
+    if (type === 'err')     { t.classList.add('t-err'); ico.innerHTML = '<path stroke-linecap="round" d="M6 18L18 6M6 6l12 12"/>'; }
+    else if (type === 'ok') { t.classList.add('t-ok');  ico.innerHTML = '<path stroke-linecap="round" d="M5 13l4 4L19 7"/>'; }
+    else { ico.innerHTML = '<circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/>'; }
+    t.classList.add('show');
+    clearTimeout(_tt);
+    _tt = setTimeout(function() { t.classList.remove('show'); }, 3000);
+}
+
+window.addEventListener('beforeunload', function(e) {
+    if (state.hasChanges) { e.preventDefault(); e.returnValue = ''; }
+});
+</script>
+</body>
+</html>
