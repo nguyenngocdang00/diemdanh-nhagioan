@@ -581,7 +581,7 @@
             </div>
             <div>
                 <div style="font-size:15px;font-weight:700;letter-spacing:-0.02em;line-height:1.2;">Gioan <span style="color:var(--accent);">Attendance</span></div>
-                <div style="font-size:10px;font-weight:600;color:var(--ink-subtle);text-transform:uppercase;letter-spacing:0.07em;">Điểm danh</div>
+                <div style="font-size:10px;font-weight:600;color:var(--ink-subtle);text-transform:uppercase;letter-spacing:0.07em;">Hệ Thống Hỗ Trợ Điểm Danh Nhà Gioan</div>
             </div>
         </div>
 
@@ -766,30 +766,42 @@ function buildTableHead() {
     document.getElementById('tableHead').innerHTML = r1 + r2 + r3;
 }
 
-// ─── JSONP ───────────────────────────────────────────────────
-function jsonpCall(url, done) {
-    var id = 'cb_' + Date.now();
-    window[id] = function(data) {
-        delete window[id];
-        var el = document.getElementById(id);
-        if (el && el.parentNode) el.parentNode.removeChild(el);
-        done(null, data);
-    };
-    var s = document.createElement('script');
-    s.id = id;
-    s.onerror = function() {
-        delete window[id];
-        if (s.parentNode) s.parentNode.removeChild(s);
-        done(new Error('script error'));
-    };
-    s.src = url + '&callback=' + id;
-    document.body.appendChild(s);
+// ─── FETCH HELPER ────────────────────────────────────────────
+// Dùng fetch() thay JSONP — hoạt động cả local lẫn GitHub Pages.
+// Apps Script (deploy "Anyone") trả CORS header cho GET request.
+// Fallback JSONP nếu fetch bị chặn (file:// protocol).
+function apiGet(url, done) {
+    fetch(url, { method: 'GET', redirect: 'follow' })
+        .then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
+        .then(function(data) { done(null, data); })
+        .catch(function(err) {
+            // Fallback: thử JSONP (cho môi trường file://)
+            var id = 'cb_' + Date.now();
+            window[id] = function(data) {
+                delete window[id];
+                var el = document.getElementById(id);
+                if (el && el.parentNode) el.parentNode.removeChild(el);
+                done(null, data);
+            };
+            var s = document.createElement('script');
+            s.id = id;
+            s.onerror = function() {
+                delete window[id];
+                if (s.parentNode) s.parentNode.removeChild(s);
+                done(err);
+            };
+            s.src = url + '&callback=' + id;
+            document.body.appendChild(s);
+        });
 }
 
 // ─── LOAD SHEET LIST ─────────────────────────────────────────
 function loadSheetList() {
     showLoading(true);
-    jsonpCall(CONFIG.SCRIPT_URL + '?action=getSheets&sheetId=' + CONFIG.SHEET_ID, function(err, res) {
+    apiGet(CONFIG.SCRIPT_URL + '?action=getSheets&sheetId=' + CONFIG.SHEET_ID, function(err, res) {
         showLoading(false);
         if (err || !res || res.status !== 'success') {
             showToast('Không lấy được danh sách lớp', 'err'); return;
@@ -819,7 +831,7 @@ function fetchData() {
     var sheetName = document.getElementById('sheetNameSelect').value;
     if (!sheetName) return;
     showLoading(true);
-    jsonpCall(
+    apiGet(
         CONFIG.SCRIPT_URL + '?action=read&sheetId=' + CONFIG.SHEET_ID + '&sheetName=' + encodeURIComponent(sheetName),
         function(err, res) {
             showLoading(false);
