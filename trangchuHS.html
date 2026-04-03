@@ -1239,7 +1239,7 @@ function setUnsaved(dirty) {
     var stxt = document.getElementById('saveText');
     if (dirty) {
         area.classList.add('status-dirty'); area.classList.remove('status-clean');
-        txt.textContent = 'Có thay đổi chưa lưu'; txt.style.color = '#ef4444';
+        txt.textContent = 'Chưa lưu'; txt.style.color = '#ef4444';
         btn.className = 'btn btn-primary dirty'; stxt.textContent = 'Lưu ngay';
     } else {
         area.classList.add('status-clean'); area.classList.remove('status-dirty');
